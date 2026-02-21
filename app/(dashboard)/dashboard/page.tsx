@@ -1,6 +1,71 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 
+interface Stats {
+  totalSchematics: number;
+  totalComponents: number;
+  totalPages: number;
+  searches: number;
+  tier: string;
+  schematicLimit: number;
+  recentSchematics: {
+    id: string;
+    fileName: string;
+    status: string;
+    createdAt: string;
+    _count: { components: number };
+  }[];
+}
+
 export default function DashboardPage() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dashboard/stats");
+      if (res.ok) {
+        setStats(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch stats:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  const formatDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const statusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      UPLOADED: "bg-blue-500/10 text-blue-400",
+      PROCESSING: "bg-warning/10 text-warning",
+      COMPLETED: "bg-success/10 text-success",
+      FAILED: "bg-danger/10 text-danger",
+    };
+    return styles[status] || "bg-muted text-muted-foreground";
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in space-y-8">
       {/* Welcome Section */}
@@ -15,7 +80,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           label="Total Schematics"
-          value="0"
+          value={String(stats?.totalSchematics || 0)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
@@ -25,7 +90,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           label="Components Detected"
-          value="0"
+          value={String(stats?.totalComponents || 0)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <rect x="2" y="2" width="20" height="20" rx="2" />
@@ -35,7 +100,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           label="Pages Processed"
-          value="0"
+          value={String(stats?.totalPages || 0)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <polyline points="22,12 18,12 15,21 9,3 6,12 2,12" />
@@ -44,7 +109,7 @@ export default function DashboardPage() {
         />
         <StatsCard
           label="Searches"
-          value="0"
+          value={String(stats?.searches || 0)}
           icon={
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <circle cx="11" cy="11" r="8" />
@@ -53,6 +118,28 @@ export default function DashboardPage() {
           }
         />
       </div>
+
+      {/* Usage Bar */}
+      {stats && stats.schematicLimit !== Infinity && (
+        <div className="glass rounded-2xl p-5">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              Usage — <span className="font-medium text-foreground capitalize">{stats.tier.toLowerCase()}</span> plan
+            </span>
+            <span className="font-medium text-foreground">
+              {stats.totalSchematics} / {stats.schematicLimit} schematics
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full transition-all gradient-primary"
+              style={{
+                width: `${Math.min((stats.totalSchematics / stats.schematicLimit) * 100, 100)}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <div>
@@ -123,27 +210,57 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Activity (empty state) */}
+      {/* Recent Activity */}
       <div>
         <h2 className="mb-4 text-lg font-semibold text-foreground">Recent Activity</h2>
-        <div className="glass flex flex-col items-center justify-center rounded-2xl p-12 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-            <svg className="h-8 w-8 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12,6 12,12 16,14" />
-            </svg>
+        {!stats?.recentSchematics?.length ? (
+          <div className="glass flex flex-col items-center justify-center rounded-2xl p-12 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+              <svg className="h-8 w-8 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12,6 12,12 16,14" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">No activity yet</h3>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              Upload your first schematic to get started with AI-powered analysis
+            </p>
+            <Link
+              href="/schematics"
+              className="gradient-primary mt-6 inline-block rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
+            >
+              Upload Schematic
+            </Link>
           </div>
-          <h3 className="text-lg font-semibold text-foreground">No activity yet</h3>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Upload your first schematic to get started with AI-powered analysis
-          </p>
-          <Link
-            href="/schematics"
-            className="gradient-primary mt-6 inline-block rounded-xl px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30"
-          >
-            Upload Schematic
-          </Link>
-        </div>
+        ) : (
+          <div className="space-y-2">
+            {stats.recentSchematics.map((s) => (
+              <Link
+                key={s.id}
+                href={`/viewer/${s.id}`}
+                className="glass group flex items-center gap-4 rounded-xl p-4 transition-all hover:border-primary/20"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <svg className="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                    <polyline points="14,2 14,8 20,8" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate font-medium text-foreground">{s.fileName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {s._count.components} components · {formatDate(s.createdAt)}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadge(s.status)}`}
+                >
+                  {s.status}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

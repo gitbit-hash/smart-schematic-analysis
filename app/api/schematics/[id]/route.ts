@@ -24,6 +24,7 @@ export async function GET(
       include: {
         pages: {
           orderBy: { pageNumber: "asc" },
+          include: { textBlocks: true },
         },
         components: true,
         bomItems: true,
